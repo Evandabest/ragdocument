@@ -10,35 +10,36 @@ export async function POST(req: Request) {
   const supabase = createClient();
 
   try {
-    const { urls } = await req.json();
+    const { urls, docID } = await req.json();
 
-    if (!urls || !Array.isArray(urls) || urls.length === 0) {
+    if (!urls) {
       return NextResponse.json({ error: 'No valid URLs provided' }, { status: 400 });
     }
 
-    const allChunks = [];
-
-    for (const url of urls) {
-      // Fetch the PDF from the URL
-      const response = await fetch(url);
-      if (!response.ok) {
-        console.warn(`Failed to fetch PDF from ${url}. Skipping.`);
-        continue;
-      }
-      const buffer = await response.arrayBuffer();
-
-      // Parse the PDF to extract text
-      const data = await pdf(Buffer.from(buffer));
-      const text = data.text;
-
-      // Use LangChain's RecursiveCharacterTextSplitter to split the text
-      const splitter = new RecursiveCharacterTextSplitter({ chunkSize: 600, chunkOverlap: 100 });
-      const chunks = await splitter.createDocuments([text]);
-
-      allChunks.push(...chunks);
+    const response = await fetch(urls);
+    if (!response.ok) {
+      throw new Error('Failed to fetch the URL');
     }
 
-    if (allChunks.length === 0) {
+    const buffer = await response.arrayBuffer();
+    if (!buffer) {
+      throw new Error('Failed to read the buffer');
+    }
+
+    // Parse the PDF to extract text
+    const data = await pdf(Buffer.from(buffer));
+    if (!data) {
+      throw new Error('Failed to parse the data');
+    }
+    const text = data.text;
+
+
+    // Use LangChain's RecursiveCharacterTextSplitter to split the text
+    const splitter = new RecursiveCharacterTextSplitter({ chunkSize: 600, chunkOverlap: 100 });
+    const chunks = await splitter.createDocuments([text]);
+
+
+    if (!chunks || chunks.length === 0) {
       return NextResponse.json({ error: 'No valid PDFs were processed' }, { status: 400 });
     }
 
@@ -48,32 +49,30 @@ export async function POST(req: Request) {
       modelName: "embedding-004",
     });
 
+    const embeddingsData = await embeddings.embedDocuments(chunks.map(chunk => chunk.metadata.text));
 
-    const embeddingsData = await Promise.all(
-      allChunks.map(async (chunk) => {
-        const [embedding] = await embeddings.embedDocuments([chunk.pageContent]);
-        return {
-          content: chunk.pageContent,
-          embedding: embedding,
-        };
-      })
-    );
+    if (!embeddingsData || embeddingsData.length === 0) {
+      throw new Error('Failed to get embeddings for the text');
+    }
 
-    // Store the embeddings in the database
     const { error } = await supabase
       .from('vectors')
-      .insert(embeddingsData);
+      .insert({
+        document: docID,
+        embeddings: embeddingsData,
+      });
 
     if (error) {
       throw new Error('Failed to insert embeddings into the database');
     }
 
     return NextResponse.json({ success: true });
-    } catch (error) {
-        console.error(error);
-        return NextResponse.json({ error: 'Failed to process PDFs' }, { status: 500 });
-    }
+  } catch (error) {
+    console.error(error);
+    return NextResponse.json({ error: 'Failed to process PDFs' }, { status: 500 });
+  }
 }
+
 
 
 export async function GET(req: Request) {
