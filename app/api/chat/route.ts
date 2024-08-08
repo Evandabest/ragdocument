@@ -12,6 +12,9 @@ export async function POST(req: Request) {
   try {
     const { urls } = await req.json();
 
+    //example request
+    
+
     if (!urls || !Array.isArray(urls) || urls.length === 0) {
       return NextResponse.json({ error: 'No valid URLs provided' }, { status: 400 });
     }
