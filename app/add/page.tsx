@@ -2,7 +2,6 @@
 import { useState, useEffect } from "react"
 import { createClient } from "@/utils/supabase/client"
 import { useRouter } from "next/navigation"
-import { addPDF } from "./actions"
 
 
 const Add = () => {
@@ -55,6 +54,8 @@ const Add = () => {
         return publicUrl
     }
 
+    
+
     const post = async (e: any) => {
 
         e.preventDefault()
@@ -85,10 +86,34 @@ const Add = () => {
             return;
         }
 
+        const { data: updatedData, error: updateError } = await supabase.from('pdf').insert({
+            link: publicUrl, 
+        }).select("id").single()
+        
+        if (updateError) {
+            console.error('Error uploading pdf:', updateError);
+            return;
+        }
+
+        const response = await fetch(`/api/pdf`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                urls: publicUrl,
+                docID: updatedData.id,
+            }),
+        });
+        if (!response.ok) {
+            const errorText = await response.text();
+            console.error('API call failed:', errorText);
+            throw new Error('Failed to call the API');
+        }
+
+        const { data: updatedData2, error: updateError2 } = await supabase.from('profiles').update({documents: [...documents, updatedData.id]}).eq('id', id)
+
         router.push('/')
-
-        await addPDF({id: id, url: publicUrl, documents: documents})
-
         
     }
 
