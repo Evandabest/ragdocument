@@ -5,7 +5,6 @@ import { ChatGoogleGenerativeAI, GoogleGenerativeAIEmbeddings } from "@langchain
 import { RecursiveCharacterTextSplitter } from "langchain/text_splitter";
 import { createClient } from "@/utils/supabase/server";
 
-
 export async function GET(req: Request) {
     const apiKey = process.env.NEXT_GOOGLE_GEMINI_KEY;
     const supabase = createClient();
