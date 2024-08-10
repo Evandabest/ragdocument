@@ -73,7 +73,7 @@ const Add = () => {
         const time = Date.now()
 
 
-        const {data, error} = await supabase.storage.from('pdfs').upload(`${id}_${time}`, pdf)
+        const {data, error} = await supabase.storage.from('pdfs').upload(`${id}_${time}`, pdf, {upsert: true, contentType: "application/pdf"})
 
         if (error) {
             console.error('Error uploading pdfs:', error);
@@ -95,20 +95,28 @@ const Add = () => {
             return;
         }
 
-        const response = await fetch(`/api/pdf`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-                urls: publicUrl,
-                docID: updatedData.id,
-            }),
-        });
-        if (!response.ok) {
-            const errorText = await response.text();
-            console.error('API call failed:', errorText);
-            throw new Error('Failed to call the API');
+        try {
+            const response = await fetch('/api/pdf', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    urls: publicUrl,
+                    docID: updatedData.id,
+                }),
+            });
+        
+            if (!response.ok) {
+                const errorText = await response.text();
+                console.error('API call failed:', errorText);
+                throw new Error('Failed to call the API');
+            }
+        
+            const result = await response.json();
+            console.log('API call succeeded:', result);
+        } catch (error) {
+            console.error('Unhandled error:', error);
         }
 
         const { data: updatedData2, error: updateError2 } = await supabase.from('profiles').update({documents: [...documents, updatedData.id]}).eq('id', id)
@@ -118,11 +126,40 @@ const Add = () => {
     }
 
 
+    const test = async () => {
+        try {
+            const response = await fetch('http://localhost:3000/api/pdf', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    urls: "https://vipeqhflctxlsrrraqta.supabase.co/storage/v1/object/public/pdfs/c49757d8-b1c5-453c-8fb3-8a346ac0a76e_1723252402494",
+                    docID: "cd11dd9f-9c2e-4b4a-8573-321183a9b793",
+                }),
+            });
+        
+            if (!response.ok) {
+                const errorText = await response.text();
+                console.error('API call failed:', errorText);
+                throw new Error('Failed to call the API');
+            }
+        
+            const result = await response.json();
+            console.log('API call succeeded:', result);
+        } catch (error) {
+            console.error('Unhandled error:', error);
+        }
+       
+    }
+
+
 
     return (
         <>
             <input className="m-auto text-white border-2 border-white w-[80%] rounded-md" type="file" onChange={newFile} name="file" />
             <button className="m-auto text-white border-2 border-white w-[80%] rounded-md" onClick={post}>Submit</button>
+            <button className="bg-white" onClick={test}>test</button>
         </>
     )
 
