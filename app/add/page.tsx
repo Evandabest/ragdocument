@@ -2,12 +2,15 @@
 import { useState, useEffect } from "react"
 import { createClient } from "@/utils/supabase/client"
 import { useRouter } from "next/navigation"
+import usePDFJS from "../hooks/usePDFJS"
 
 
 const Add = () => {
     const [pdf, setPdf] = useState<File | undefined>(undefined)
     const [id, setId] = useState<string | undefined>(undefined)
     const [documents, setDocuments] = useState<string[]>([])
+    const [url, setUrl] = useState<string | undefined>(undefined)
+    const [uploaded, setUploaded] = useState<boolean>(false)
     const supabase = createClient()
     const router = useRouter()
 
@@ -85,6 +88,9 @@ const Add = () => {
             console.error('Error fetching public url');
             return;
         }
+        
+        setUrl(publicUrl)
+        setUploaded(true)
 
         const { data: updatedData, error: updateError } = await supabase.from('pdf').insert({
             link: publicUrl, 
@@ -94,72 +100,42 @@ const Add = () => {
             console.error('Error uploading pdf:', updateError);
             return;
         }
-
-        try {
-            const response = await fetch('/api/pdf', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    urls: publicUrl,
-                    docID: updatedData.id,
-                }),
-            });
-        
-            if (!response.ok) {
-                const errorText = await response.text();
-                console.error('API call failed:', errorText);
-                throw new Error('Failed to call the API');
-            }
-        
-            const result = await response.json();
-            console.log('API call succeeded:', result);
-        } catch (error) {
-            console.error('Unhandled error:', error);
-        }
-
+       
         const { data: updatedData2, error: updateError2 } = await supabase.from('profiles').update({documents: [...documents, updatedData.id]}).eq('id', id)
 
-        router.push('/')
+        const encodedPublicUrl = encodeURIComponent(publicUrl);
+        router.push(`/loading/${encodedPublicUrl}`)
         
     }
 
 
-    const test = async () => {
-        try {
-            const response = await fetch('http://localhost:3000/api/pdf', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    urls: "https://vipeqhflctxlsrrraqta.supabase.co/storage/v1/object/public/pdfs/c49757d8-b1c5-453c-8fb3-8a346ac0a76e_1723252402494",
-                    docID: "cd11dd9f-9c2e-4b4a-8573-321183a9b793",
-                }),
-            });
+    if (uploaded) {
+        usePDFJS(async (pdfjs) => {
+            try {
+            const loadingTask = pdfjs.getDocument(url);
+            const pdf = await loadingTask.promise;
+            const numPages = pdf.numPages;
+            let extractedText = "";
         
-            if (!response.ok) {
-                const errorText = await response.text();
-                console.error('API call failed:', errorText);
-                throw new Error('Failed to call the API');
+            for (let pageNum = 1; pageNum <= numPages; pageNum++) {
+                const page = await pdf.getPage(pageNum);
+                const textContent = await page.getTextContent();
+                const textItems = textContent.items.map((item: any) => item.str).join(" ");
+                extractedText += `Page ${pageNum}:\n${textItems}\n\n`;
             }
         
-            const result = await response.json();
-            console.log('API call succeeded:', result);
-        } catch (error) {
-            console.error('Unhandled error:', error);
-        }
-       
+            console.log(extractedText);
+            } catch (error) {
+            console.error("Error loading PDF: ", error);
+            }
+        });
     }
-
 
 
     return (
         <>
             <input className="m-auto text-white border-2 border-white w-[80%] rounded-md" type="file" onChange={newFile} name="file" />
             <button className="m-auto text-white border-2 border-white w-[80%] rounded-md" onClick={post}>Submit</button>
-            <button className="bg-white" onClick={test}>test</button>
         </>
     )
 
